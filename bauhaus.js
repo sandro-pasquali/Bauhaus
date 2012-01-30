@@ -2,17 +2,17 @@
 
 (function() {
 
+//	#indexOf and #lastIndexOf are attached to #LIST_M collection.
+//
 var ARRAY_M = [
-    "each", 
-    "forEach", 
-    "map", 
+    "each",
+    "forEach",
+    "map",
     "filter",
-    "every", 
-    "some", 
-    "reduce", 
-    "reduceRight", 
-    "indexOf", 
-    "lastIndexOf"
+    "every",
+    "some",
+    "reduce",
+    "reduceRight"
 ];
 
 var LIST_M = [
@@ -30,6 +30,11 @@ var LIST_M = [
     "sequence",
     "get",
     "set",
+    "indexOf",
+    "lastIndexOf",
+    "intersect",
+    "diff",
+    "union",
     "commit",
     "reset",
     "unset",
@@ -39,32 +44,73 @@ var LIST_M = [
     "totalPages"
 ];
 
-var BINDING = {
-	original 	: [],
-	active		: []
-};
-
-var ORIGINAL 	= BINDING.original;
-var ACTIVE		= BINDING.active;
+var ORIGINAL 	= [];
+var ACTIVE		= [];
 
 var PAGINATION	= 0;
 var CUR_PAGE	= 1;
 
-var KIT = {};
+var	OP_TO_STRING	= Object.prototype.toString;
 
-//  A library of common methods
-//  
+//	Object representing the public interface, assigned to #bauhaus bound to either
+//	`module` or `window` context, extended with methods in #ARRAY_M and #LIST_M.
+//
 var $$ = {
-    isArray     : function(a) {
-        return Object.prototype.toString.call(a) === '[object Array]';
-    },
+	// 	##is
+	//
+	//	Whether #val is of #type. For most objects the constructor is
+	//	matched, which allows:
+	//		var inst = new SomeFunc();
+	//		$$.is(SomeFunc, inst) // true
+	//
+	//	@param		{Mixed}		type		An object type.
+	// 	@param		{Mixed}		val			The value to check.
+	//	@type		{Boolean}
+	//
+	is 	: function(type, val) {
+
+		if(!type || val === void 0) {
+			return false;
+		}
+
+		var p;
+
+		switch(type) {
+			case Array:
+				return OP_TO_STRING.call(val) === '[object Array]';
+			break;
+
+			case Object:
+				return OP_TO_STRING.call(val) === '[object Object]';
+			break;
+
+			case "numeric":
+				return !isNaN(parseFloat(val)) && isFinite(val);
+			break;
+
+			case "element":
+				return val.nodeType === 1;
+			break;
+
+			case "empty":
+				for(p in val) {
+					return false;
+				}
+				return true;
+			break;
+
+			default:
+				return val.constructor === type;
+			break;
+		}
+	},
     argsToArray : function(a, offset, end) {
         return Array.prototype.slice.call(a, offset || 0, end);
     },
-    objToArray  : function(o, vals) {
+    objectToArray  	: function(o, vals) {
         var p;
         var r = [];
-    
+
         for(p in o) {
             if(vals) {
                 r[o[p]] = p;
@@ -72,21 +118,21 @@ var $$ = {
                 r.push(p);
             }
         }
-    
+
         return r;
     },
-    arrayToObj  : function(a) {
+    arrayToObject  	: function(a) {
         var len = a.length;
         var ob 	= {};
-    
+
         while(len--) {
             ob[a[len]] = len;
         }
-    
+
         return ob;
     },
-    copy        : function(s) {
-        return this.isArray(s) ? s.slice(0) : s;
+    copy  	: function(s) {
+        return $$.is(Array, s) ? s.slice(0) : s;
     }
 };
 
@@ -97,7 +143,7 @@ var $$ = {
 //	array or an object. Error, otherwise.
 //
 //	@param		{Function}		fn		The selective function.
-//	@param		{Object}		[targ]	The object to work against. 
+//	@param		{Object}		[targ]	The object to work against.
 //	@param		{Mixed}			[acc]	An accumulator, which is set to result of selective
 //										function on each interation through target.
 //	@see	#ARRAY_METHOD
@@ -106,7 +152,7 @@ var	ARRAY_M_ITERATOR	= function(fn, targ, acc) {
 	var c	= targ.length;
 	var n	= 0;
 
-	if($$.isArray(targ)) {
+	if($$.is(Array, targ)) {
 		while(n < c) {
 			if(n in targ) {
 				acc = fn.call(this, targ[n], n, targ, acc);
@@ -126,7 +172,7 @@ var	ARRAY_M_ITERATOR	= function(fn, targ, acc) {
 
 //	##ARRAY_METHOD
 //
-//	"Normalize" several array manipulation methods, such as #each and #map. 
+//	"Normalize" several array manipulation methods, such as #each and #map.
 //
 //	@param		{String}		meth	The array method.
 //	@param		{Function}		fn		The selective function.
@@ -137,10 +183,10 @@ var	ARRAY_M_ITERATOR	= function(fn, targ, acc) {
 //
 var ARRAY_METHOD = function(meth, fn, targ, arg2) {
 
-    targ = typeof targ === "string" ? KIT.range(targ, 0) : targ;
-    
+    targ = typeof targ === "string" ? $$.range(targ, 0) : targ;
+
     var scope	= arg2 || this;
-    var nat		= $$.isArray(targ) && targ[meth];
+    var nat		= $$.is(Array, targ) && targ[meth];
 
     switch(meth) {
         case "each":
@@ -183,14 +229,6 @@ var ARRAY_METHOD = function(meth, fn, targ, arg2) {
                     }, targ, []).length > 0;
         break;
 
-        case "indexOf":
-            return 1
-        break;
-
-        case "lastIndexOf":
-            return 1;
-        break;
-
         //	Note how the #reduce methods change the argument order passed to the
         //	selective function.
         //
@@ -217,6 +255,28 @@ var ARRAY_METHOD = function(meth, fn, targ, arg2) {
     }
 };
 
+//	##PROC_ARR_ARGS
+//
+//	Ensures that sent array members are each arrays. Note that the sent array
+//	reference is modified, so there is no return value.
+//
+//	@see	#union
+//	@see	#intersect
+//	@see	#diff
+//
+var PROC_ARR_ARGS = function(a) {
+	var len = a.length;
+	var c;
+	while(len--) {
+		c = a[len];
+		a[len] = 	$$.is(Array, c)
+					? c
+					: typeof c === "string" && ACTIVE[c]
+						? ACTIVE[c]
+						: [];
+	}
+};
+
 //	These list methods only return a value if their operation is non-destructive.
 //	The current operating list is passed by reference, and as such does not need
 //	to be returned.
@@ -235,6 +295,7 @@ var LIST_METHOD = {
     get     : function(cur, a, len) {
         return cur[a[0] >= 0 ? a[0] : len + a[0]];
     },
+
     //  ##set
     //
     //  Fetch item at sent index.
@@ -250,6 +311,7 @@ var LIST_METHOD = {
     set     : function(cur, a, len) {
         return (cur[a[0] >= 0 ? a[0] : len + a[0]] = a[1]);
     },
+
     //  ##insert
     //
     //  Insert item before or after another item value.
@@ -275,9 +337,10 @@ var LIST_METHOD = {
                 break;
             }
         }
-        
+
         return cur;
     },
+
     //  ##size
     //
     //  Returns the length of the list
@@ -285,6 +348,7 @@ var LIST_METHOD = {
     size   	: function(cur, a, len) {
         return len;
     },
+
     //  ##first
     //
     //  Regarding the first item, either fetch it by sending zero arguments,
@@ -303,6 +367,7 @@ var LIST_METHOD = {
 
         return cur;
     },
+
     //  ##firstx
     //
     //  Regarding the first item, either fetch it by sending zero arguments,
@@ -313,6 +378,7 @@ var LIST_METHOD = {
     firstx  : function(cur, a) {
         return cur ? this.first(cur, a) : null;
     },
+
     //  ##last
     //
     //  Regarding the last item, either fetch it by sending zero arguments,
@@ -332,6 +398,7 @@ var LIST_METHOD = {
 
         return cur;
     },
+
     //  ##lastx
     //
     //  Regarding the last item, either fetch it by sending zero arguments,
@@ -343,6 +410,38 @@ var LIST_METHOD = {
     lastx   : function(cur, a) {
         return cur ? this.last(cur, a) : null;
     },
+
+    //	##indexOf
+    //
+    indexOf		: function(cur, a, len, key) {
+
+    	var off	= a[1] || 0;
+
+    	while(off < len) {
+    		if(cur[off] === a[0]) {
+    			return off;
+    		}
+    		++off;
+    	}
+
+    	return -1;
+    },
+
+    //	##lastIndexOf
+    //
+    lastIndexOf		: function(cur, a, len, key) {
+
+        var off	= a[1] || 0;
+
+    	while(--len >= off) {
+    		if(cur[len] === a[0]) {
+    			return len;
+    		}
+    	}
+
+    	return -1;
+    },
+
     //  ##range
     //
     //  Returns a range of elements.
@@ -367,6 +466,7 @@ var LIST_METHOD = {
 
         return cur.slice(v[0], v[1]);
     },
+
     //  ##remove
     //
     remove  : function(cur, a, len) {
@@ -396,9 +496,10 @@ var LIST_METHOD = {
         while(hLen--) {
             cur.splice(hits[hLen], 1);
         }
-        
+
         return cur;
     },
+
     //  ##unique
     //
     //	Unique-ifys the #active list.
@@ -415,9 +516,10 @@ var LIST_METHOD = {
 		}
 
 		cur = r;
-		
+
 		return cur;
     },
+
     //  ##shuffle
     //
     //	Shuffle a list randomly.
@@ -437,14 +539,15 @@ var LIST_METHOD = {
 			cur[len] = cur[r];
 			cur[r] = s;
 		}
-		
+
 		return cur;
     },
+
     //  ##compose
     //
     //  Returns the composed result of a list of functions processed tail to head.
     //  Expects a single argument, which is the value to pass to the tail function.
-    //  NOTE that no checking is done of list member types. If any member is not a 
+    //  NOTE that no checking is done of list member types. If any member is not a
     //  function this will error.
     //
     compose		: function(cur, a, len) {
@@ -455,11 +558,12 @@ var LIST_METHOD = {
 
     	return last;
     },
+
     //  ##sequence
     //
     //  Returns the composed result of a list of functions processed head to tail.
     //  Expects a single argument, which is the value to pass to the head function.
-    //  NOTE that no checking is done of list member types. If any member is not a 
+    //  NOTE that no checking is done of list member types. If any member is not a
     //  function this will error.
     //
     sequence	: function(cur, a, len) {
@@ -472,6 +576,92 @@ var LIST_METHOD = {
 
     	return last;
     },
+
+	//	##union
+	//
+	//	Union of all lists (add unique members of all lists).
+	//
+	//	@see	#LIST_ACCESSOR
+	//	@return	{Array}
+	//
+    union  : function(cur, a, len) {
+
+		a.push(cur);
+		PROC_ARR_ARGS(a);
+
+        var map		= {};
+        var s;
+        var si;
+        var m;
+
+        while(m = a.shift()) {
+            si	= m.length;
+            while(si--) {
+            	map[m[si]] = 1;
+            }
+        }
+
+		return $$.objectToArray(map);
+    },
+
+	//	##diff
+	//
+	//	Difference between first list (#prime) and subsequent lists (members of #prime
+	//	list which do not exist in any other list).
+	//
+	//	@see	#LIST_ACCESSOR
+	//	@return	{Array}
+	//
+    diff   : function(cur, a, len) {
+
+    	PROC_ARR_ARGS(a);
+
+        var prime 	= $$.arrayToObject(cur);
+        var si;
+        var m;
+
+        while(m = a.shift()) {
+            si	= m.length;
+            while(si--) {
+                if(prime[m[si]] !== void 0) {
+                	delete prime[m[si]];
+                }
+            }
+        }
+
+        return $$.objectToArray(prime);
+    },
+
+	//	##intersect
+	//
+	//	Intersection of all lists (members which exist in all lists).
+	//
+	//	@see	#LIST_ACCESSOR
+	//	@return	{Array}
+	//
+    intersect   : function(cur, a, len) {
+
+        a.push(cur);
+        PROC_ARR_ARGS(a);
+
+        var aL  = a.length;
+        var map = {};
+        var res = [];
+        var m;
+        var si;
+
+        while(m = a.shift()) {
+            si 	= m.length;
+            while(si--) {
+                if((map[m[si]] = map[m[si]] ? map[m[si]] += 1 : 1) === aL) {
+                    res.push(m[si]);
+                }
+            }
+        }
+
+        return res;
+    },
+
     //  ##commit
     //
     //	Will replace the #original list with the current #active list.
@@ -479,6 +669,7 @@ var LIST_METHOD = {
     commit	: function(cur, a, len, key) {
     	ORIGINAL[key] = $$.copy(ACTIVE[key]);
     },
+
     //  ##reset
     //
     //	Will replace the #active list with the #original list.
@@ -486,6 +677,7 @@ var LIST_METHOD = {
     reset	: function(cur, a, len, key) {
     	ACTIVE[key] = $$.copy(ORIGINAL[key]);
     },
+
     //  ##unset
     //
     //	Will remove a key (a list) entirely.
@@ -506,7 +698,7 @@ var LIST_METHOD = {
     iterator	: function(cur, a, len, key) {
 
     	return new function() {
-    		var list = 	$$.copy(	$$.isArray(key)
+    		var list = 	$$.copy(	$$.is(Array, key)
 							? key
 							: a[0] === "original"
 								? ORIGINAL[key]
@@ -615,7 +807,7 @@ var LIST_ACCESSOR = function(m, key) {
     //  There is no value set.
     //
     if(!cur) {
-        if($$.isArray(key)) {
+        if($$.is(Array, key)) {
             cur = key;
         } else if(a[0] !== void 0 && (m == "first" || m == "last")) {
         	cur = ACTIVE[key] = [];
@@ -647,7 +839,7 @@ var LIST_ACCESSOR = function(m, key) {
 //
 while(ARRAY_M.length) {
 	(function(m) {
-        KIT[m] = function(fn, targ, scope) {
+        $$[m] = function(targ, fn, scope) {
             return ARRAY_METHOD(m, fn, targ, scope);
         }
     })(ARRAY_M.pop());
@@ -657,8 +849,8 @@ while(ARRAY_M.length) {
 //
 while(LIST_M.length) {
 	(function(m) {
-        KIT[m] = function() {
-    
+        $$[m] = function() {
+
             //	Methods have varying functional signatures.
             //
             var a = $$.argsToArray(arguments);
@@ -666,16 +858,18 @@ while(LIST_M.length) {
             //	#LIST_ACCESSOR expects method name as first argument.
             //
             a.unshift(m);
-    
-            return LIST_ACCESSOR.apply(KIT, a);
+
+            return LIST_ACCESSOR.apply($$, a);
         };
     })(LIST_M.pop());
 }
 
 if(typeof exports == 'object' && exports) {
-    exports.bauhaus = KIT;
+    exports.bauhaus = $$;
 } else {
-    window.bauhaus = KIT;
+    window.bauhaus = $$;
 }
+
+console.log($$)
 
 })();
