@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Bauhaus</title>
+	<script type="text/javascript" src="../bauhaus.js"></script>
+	<script type="text/javascript">
+
+    var L = bauhaus;
+    
+    console.log(L);
+    
+    L.first("pages", "a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z");
+    console.log(L.range("pages", 0))
+    
+    L.paginate("pages", 6);
+    
+    console.log("-1: " + L.page("pages", -1))
+    console.log("-2: " + L.page("pages", -2))
+    console.log("-3: " + L.page("pages", -3))
+    console.log("-4: " + L.page("pages", -4))
+    console.log("-5: " + L.page("pages", -5))
+    console.log("-6: " + L.page("pages", -6))
+    
+    console.log("\n");
+    
+    console.log("1: " + L.page("pages", 1))
+    console.log("2: " + L.page("pages", 2))
+    console.log("3: " + L.page("pages", 3))
+    console.log("4: " + L.page("pages", 4))
+    console.log("5: " + L.page("pages", 5))
+    console.log("6: " + L.page("pages", 6))
+    
+    var iterator = L.iterator("pages");
+    console.log(iterator.prev());
+    console.log(iterator.next());
+    console.log(iterator.next());
+    console.log(iterator.next());
+    console.log(iterator.prev());
+    console.log(iterator.prev());
+    console.log(iterator.prev());
+    
+    L.last("sandro", 4, 4, 1, 2, 3, 4, 4, 4, "a", {foo: "BAR"}, [88,99,1010])
+    L.remove("sandro", -2, 4);
+    L.remove("sandro", 2, 4);
+    L.remove("sandro", 0, 4);
+    L.shuffle("sandro")
+	
+	console.log(L.map(function(e) {
+	    return e += 1;
+	}, [1,2,3,4,5]));
+	
+	console.log(L.map(function(e) {
+	    return e += 1;
+	}, "pages"));
+	
+	console.log("PAGES: ");
+	console.log(L.range("pages", 0));
+	console.log(L.shuffle("pages"));
+	console.log(L.range("pages", 0));
+	</script>
+</head>
+<body>
+
+</body>
+</html>
