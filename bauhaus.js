@@ -30,6 +30,9 @@ var LIST_M = [
     "sequence",
     "get",
     "set",
+    "$flatten",
+    "$compact",
+    "$without",
     "indexOf",
     "lastIndexOf",
     "intersect",
@@ -51,6 +54,9 @@ var PAGINATION	= 0;
 var CUR_PAGE	= 1;
 
 var	OP_TO_STRING	= Object.prototype.toString;
+var AP_SLICE		= Array.prototype.slice;
+
+var UNIQUE_ID	= 1;
 
 //	Object representing the public interface, assigned to #bauhaus bound to either
 //	`module` or `window` context, extended with methods in #ARRAY_M and #LIST_M.
@@ -59,13 +65,14 @@ var $$ = {
 	// 	##is
 	//
 	//	Whether #val is of #type. For most objects the constructor is
-	//	matched, which allows:
-	//		var inst = new SomeFunc();
-	//		$$.is(SomeFunc, inst) // true
+	//	matched.
 	//
 	//	@param		{Mixed}		type		An object type.
 	// 	@param		{Mixed}		val			The value to check.
 	//	@type		{Boolean}
+	//
+	//	@example	var inst = new SomeFunc();
+	//				$$.is(SomeFunc, inst) // true
 	//
 	is 	: function(type, val) {
 
@@ -104,9 +111,70 @@ var $$ = {
 			break;
 		}
 	},
+
+	//	##uniqueId
+	//
+	//	Simply an incremented number + a prefix. You're safe until about +/- 9007199254740992.
+	//
+	//	@param	{String}	[pref]		A prefix for unique id. Defaults to "_"(underscore)
+	//
+	uniqueId	: function(pref) {
+		++UNIQUE_ID;
+		return (pref || "_") + UNIQUE_ID;
+	},
+
+	//	##escape
+	//
+	//	Escapes HTML text, making it suitable for insertion into page flow.
+	//
+	//	@param	{String}	text	The text to escape.
+	//
+	//	@see 	http://davidchambersdesign.com/escaping-html-in-javascript/
+	//
+	escape	: function(text) {
+		return text.replace(/[&<>"'`]/g, function(chr) {
+    		return '&#' + chr.charCodeAt(0) + ';';
+  		});
+	},
+
+	//	##boundFunction
+	//
+	//	Returns a function F which will execute #fbody within the context F is called.
+	//
+	//	@param	{String}	fbody	The body of the function to be created.
+	//
+	//	@example:	var f = scopedFunction("console.log(foo)");
+	//				f.apply/call({ foo: "bar" }); // `bar`
+	//
+	boundFunction 	: function(fbody) {
+		return Function(
+			"with(this) { return (function(){" + fbody + "})(); };"
+		)
+	},
+
+	//	##argsToArray
+	//
+	//	Converts an arguments object to an array.
+	//
+	//	@param	{Arguments}		a
+	//	@param	{Number}		[offset]	Index to begin plucking arguments. Default 0.
+	//	@param	{Number}		[end]		Index to stop plucking arguments. Default to end.
+	//
     argsToArray : function(a, offset, end) {
-        return Array.prototype.slice.call(a, offset || 0, end);
+        return AP_SLICE.call(a, offset || 0, end);
     },
+
+    //	##objectToArray
+    //
+    //	Converts an object to an array.
+    //
+    //	@param	{Object}	o		The object to convert.
+    //	@param	{Boolean}	[vals]	Whether to use object value as its index in new array.
+    //
+    //	@example	: 	var obj = {a:1,b:2,c:3}
+    //					Without #vals	: ["a","b","c"]
+    //					With #vals		: [undefined,"a","b","c"]
+    //
     objectToArray  	: function(o, vals) {
         var p;
         var r = [];
@@ -121,6 +189,15 @@ var $$ = {
 
         return r;
     },
+
+    //	##arrayToObject
+    //
+    //	Converts an array to an object
+    //
+    //	@param	{Array}		a	The array to convert.
+    //
+    //	@example	["a","b","c"]	->	{a: 0, b: 1, c: 2}
+    //
     arrayToObject  	: function(a) {
         var len = a.length;
         var ob 	= {};
@@ -131,9 +208,62 @@ var $$ = {
 
         return ob;
     },
-    copy  	: function(s) {
-        return $$.is(Array, s) ? s.slice(0) : s;
-    }
+
+    //	##copy
+    //
+    //	Copies an object.
+    //
+    //	@param	{Mixed}		o		The copy candidate.
+    //	@param	{Boolean}	[deep]	Whether do a deep copy.
+    //
+    copy  	: function(o, deep) {
+        var cp = function(ob) {
+            var fin;
+            var p;
+
+            if(typeof ob !== "object" || ob === null || ob.$n) {
+                return ob;
+            }
+
+			if(!deep) {
+				return ob.slice(0);
+			}
+
+            try {
+                fin = new ob.constructor;
+            } catch(e) {
+                return ob;
+            }
+
+            for(p in ob) {
+                fin[p] = cp(ob[p], deep);
+            }
+
+            return fin;
+        }
+
+        return cp(o);
+    },
+
+	//	##memoize
+	//
+	//	@param		{Function}		f		The function to memoize.
+	//	@param		{Object}		[scp]	The scope to execute the function within.
+	//
+	memoize	: function(f, scp) {
+
+		scp		= scp || $$;
+
+		var m 	= {};
+		var aj	= Array.prototype.join;
+
+		return function() {
+			//	Key joins arguments on escape character as delimiter which should be safe.
+			//
+			var k = aj.call(arguments, "\x1B");
+			return m.hasOwnProperty(k) || (m[k] = f.apply(scp, arguments));
+		};
+	}
 };
 
 //	##ARRAY_M_ITERATOR
@@ -505,17 +635,12 @@ var LIST_METHOD = {
     //	Unique-ifys the #active list.
     //
     unique  	: function(cur, a, len) {
-		var board = {};
-		var r = [];
-
+		var map = {};
+		var c;
 		while(len--) {
-			if(!board[cur[len]]) {
-				r.unshift(cur[len]);
-				board[cur[len]] = true;
-			}
+			c = map[cur[len]];
+			((map[cur[len]] = c ? c += 1 : 1) > 1) && cur.splice(len, 1);
 		}
-
-		cur = r;
 
 		return cur;
     },
@@ -586,13 +711,13 @@ var LIST_METHOD = {
 	//
     union  : function(cur, a, len) {
 
-		a.push(cur);
-		PROC_ARR_ARGS(a);
-
-        var map		= {};
+        var map	= {};
         var s;
         var si;
         var m;
+
+		a.push(cur);
+		PROC_ARR_ARGS(a);
 
         while(m = a.shift()) {
             si	= m.length;
@@ -614,11 +739,11 @@ var LIST_METHOD = {
 	//
     diff   : function(cur, a, len) {
 
-    	PROC_ARR_ARGS(a);
-
         var prime 	= $$.arrayToObject(cur);
         var si;
         var m;
+
+        PROC_ARR_ARGS(a);
 
         while(m = a.shift()) {
             si	= m.length;
@@ -641,21 +766,20 @@ var LIST_METHOD = {
 	//
     intersect   : function(cur, a, len) {
 
-        a.push(cur);
-        PROC_ARR_ARGS(a);
-
-        var aL  = a.length;
+        var aL 	= a.push(cur);
         var map = {};
         var res = [];
         var m;
         var si;
+        var c;
+
+		PROC_ARR_ARGS(a);
 
         while(m = a.shift()) {
             si 	= m.length;
             while(si--) {
-                if((map[m[si]] = map[m[si]] ? map[m[si]] += 1 : 1) === aL) {
-                    res.push(m[si]);
-                }
+            	c = map[m[si]];
+                ((map[m[si]] = c ? c += 1 : 1) === aL) && res.push(m[si]);
             }
         }
 
@@ -705,9 +829,17 @@ var LIST_METHOD = {
 								: ACTIVE[key], 1);
 
     		this.idx		= -1;
-    		this.moveIdx	= function(d) {
+    		this.moveIdx	= function(d, circ) {
     			var i	= this.idx + d;
     			var len = list.length -1;
+
+				// 	If the operation exceeds list bound and the #circ(ular) directive
+				//	was not sent, the result of the operation is `undefined`.
+				//
+    			if(!circ && (d === -1 ? i < 0 : i > len)) {
+    				return void 0;
+    			}
+
     			this.idx =	i < 0
 							? len
 							: i > len
@@ -715,11 +847,11 @@ var LIST_METHOD = {
 								: i;
 				return this.idx;
     		};
-    		this.next	= function() {
-    			return list[this.moveIdx(1)];
+    		this.next	= function(circ) {
+    			return list[this.moveIdx(1, circ)];
     		};
-    		this.prev	= function() {
-    			return list[this.moveIdx(-1)];
+    		this.prev	= function(circ) {
+    			return list[this.moveIdx(-1, circ)];
     		};
     		this.nextIndex	= function() {
     			return this.moveIdx(1);
