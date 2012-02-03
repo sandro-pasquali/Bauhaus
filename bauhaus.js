@@ -5,46 +5,60 @@
 //	#indexOf and #lastIndexOf are attached to #LIST_M collection.
 //
 var ARRAY_M = [
-    "each",
+    "all",          //  alias #every
+    "any",          //  alias #some
+    "collect",      //  alias #map
+    "each",         //  alias #forEach
+    "every",   
+    "filter",     
+    "foldl",        //  alias #reduce
+    "foldr",        //  alias #reduceRight
     "forEach",
+    "indexOf",
+    "lastIndexOf",
     "map",
-    "filter",
-    "every",
-    "some",
-    "reduce",
-    "reduceRight"
+    "reduce",       
+    "reduceRight",
+    "select",       //  alias #filter
+    "some"
 ];
 
 var LIST_M = [
-    "insert",
+    "bump",
+    "commit",
+    "compact",
+    "compose",
+    "contains",
+    "diff",
     "size",
+    "find",
+    "findLast",
     "first",
     "firstx",
+    "flatten",
+    "get",
+    "insert",
+    "intersect",
+    "invoke",
+    "iterator",
     "last",
     "lastx",
-    "range",
-    "remove",
-    "unique",
-    "shuffle",
-    "compose",
-    "sequence",
-    "get",
-    "set",
-    "$flatten",
-    "$compact",
-    "$without",
-    "indexOf",
-    "lastIndexOf",
-    "intersect",
-    "diff",
-    "union",
-    "commit",
-    "reset",
-    "unset",
-    "iterator",
-    "paginate",
+    "max",
+    "min",
     "page",
-    "totalPages"
+    "paginate",
+    "pluck",
+    "range",
+    "reject",
+    "remove",
+    "reset",
+    "sequence",
+    "set",
+    "shuffle",
+    "totalPages",
+    "union",
+    "unique",
+    "unset"
 ];
 
 var ORIGINAL 	= [];
@@ -183,7 +197,7 @@ var $$ = {
             if(vals) {
                 r[o[p]] = p;
             } else {
-                r.push(p);
+                r[r.length] = p;
             }
         }
 
@@ -266,38 +280,45 @@ var $$ = {
 	}
 };
 
-//	##ARRAY_M_ITERATOR
+//	##ITERATOR
 //
 //	Returns accumulator as modified by passed selective function.
 //	Note that no checking of target is done, expecting that you send either an
-//	array or an object. Error, otherwise.
+//	array or an object. Error otherwise. Also see notes on @acc, below.
 //
 //	@param		{Function}		fn		The selective function.
 //	@param		{Object}		[targ]	The object to work against.
 //	@param		{Mixed}			[acc]	An accumulator, which is set to result of selective
-//										function on each interation through target.
+//										function on each interation through target.  If this
+//                                      is undefined (void 0) this method returns the last
+//                                      index reached.
+//  @param      {Object}        [ctxt]  A context to run the iterator in.
+//
 //	@see	#ARRAY_METHOD
 //
-var	ARRAY_M_ITERATOR	= function(fn, targ, acc) {
+var	ITERATOR	= function(fn, targ, acc, ctxt) {
 	var c	= targ.length;
 	var n	= 0;
+	var idx = acc === void 0 ? true : false;
 
 	if($$.is(Array, targ)) {
 		while(n < c) {
-			if(n in targ) {
-				acc = fn.call(this, targ[n], n, targ, acc);
+			acc = ctxt ? fn.call(ctxt, targ[n], n, targ, acc) : fn(targ[n], n, targ, acc);
+			if(acc === true) {
+			    break;
 			}
 			n++;
 		}
 	} else {
 		for(n in targ) {
-			if(targ.hasOwnProperty(n)) {
-				acc = fn.call(this, targ[n], n, targ, acc);
+			acc = ctxt ? fn.call(ctxt, targ[n], n, targ, acc) : fn(targ[n], n, targ, acc);
+			if(acc === true) {
+			    break;
 			}
 		}
 	}
 
-	return acc;
+	return idx ? n : acc;
 };
 
 //	##ARRAY_METHOD
@@ -310,53 +331,90 @@ var	ARRAY_M_ITERATOR	= function(fn, targ, acc) {
 //                                      try to fetch a list by that name.
 //	@param		{Mixed}			[arg2]	Usually the scope in which to execute the method, but
 //										in the case of #reduce this is an [initialValue].
+//  @param      {Mixed}         [arg3]  If #reduce, scope in which to execute the method.
 //
-var ARRAY_METHOD = function(meth, fn, targ, arg2) {
+var ARRAY_METHOD = function(meth, targ, fn, arg2, arg3) {
 
+    //  If the target is a string, assume a list being requested by name. 
+    //
     targ = typeof targ === "string" ? $$.range(targ, 0) : targ;
+    
+    //  Can only operate on objects.
+    //
+    if(typeof targ !== "object") { 
+        return null;
+    }
 
-    var scope	= arg2 || this;
+    var scope	= arg3 || (arg2 || $$);
+
+    //  Will use native method if we're working with an array, and the method exists on
+    //  that array. Passing an object, IOW, uses custom method.
+    //
     var nat		= $$.is(Array, targ) && targ[meth];
-
+nat = false;
     switch(meth) {
         case "each":
         case "forEach":
             return 	nat ? targ.forEach(fn, scope)
-                    : ARRAY_M_ITERATOR.call(this, function(elem, idx, targ) {
+                    : ITERATOR(function(elem, idx, targ) {
                         fn.call(scope, elem, idx, targ);
                     }, targ);
         break;
 
+        case "collect":
         case "map":
             return	nat ? targ.map(fn, scope)
-                    : ARRAY_M_ITERATOR.call(this, function(elem, idx, targ, acc) {
+                    : ITERATOR(function(elem, idx, targ, acc) {
                         acc[idx] = fn.call(scope, elem, idx, targ);
                         return acc;
                     }, targ, []);
         break;
 
+        case "select":
         case "filter":
             return	nat ? targ.filter(fn, scope)
-                    : ARRAY_M_ITERATOR.call(this, function(elem, idx, targ, acc) {
+                    : ITERATOR(function(elem, idx, targ, acc) {
                         fn.call(scope, elem, idx, targ) && acc.push(elem);
                         return acc;
                     }, targ, []);
         break;
 
+        case "all":
         case "every":
             return 	nat ? targ.every(fn, scope)
-                    : ARRAY_M_ITERATOR.call(this, function(elem, idx, targ, acc) {
-                        fn.call(scope, elem, idx, targ) && acc.push(1);
-                        return acc;
-                    }, targ, []).length === targ.length;
+                    : ITERATOR(function(elem, idx, targ) {
+                        return fn.call(scope, elem, idx, targ) === false ? true : false;
+                    }, targ, []) === false;
         break;
 
+        case "any":
         case "some":
             return	nat ? targ.some(fn, scope)
-                    : ARRAY_M_ITERATOR.call(this, function(elem, idx, targ, acc) {
-                        fn.call(scope, elem, idx, targ) && acc.push(1);
-                        return acc;
-                    }, targ, []).length > 0;
+                    : ITERATOR(function(elem, idx, targ) {
+                        return fn.call(scope, elem, idx, targ) === true ? true : false;
+                    }, targ, []) === true;
+        break;
+        
+        case "indexOf":        
+            if(nat) {
+                return targ.indexOf(fn, arg2 === void 0 ? 0 : arg2);
+            };
+
+            var off	= arg2 || 0;
+            var len = targ.length;
+            while(off < len) {
+                if(targ[off] === fn) {
+                    return off;
+                }
+                ++off;
+            }
+            return -1;
+
+        break;
+        
+        case "lastIndexOf":       
+            return  nat ? targ.lastIndexOf(fn, arg2 === void 0 ? targ.length : arg2)
+                        : ARRAY_METHOD("indexOf", $$.copy(targ), fn, arg2);
         break;
 
         //	Note how the #reduce methods change the argument order passed to the
@@ -368,19 +426,21 @@ var ARRAY_METHOD = function(meth, fn, targ, arg2) {
         //
         //	@see	https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Array/Reduce
         //
+        case "foldl":
         case "reduce":
             var offset 	= !arg2 ? 1 : 0;
             return	nat ? targ.reduce(fn, arg2 === void 0 ? false : arg2)
-                    : ARRAY_M_ITERATOR.call(this, function(elem, idx, targ, acc) {
+                    : ITERATOR(function(elem, idx, targ, acc) {
                         return targ[idx + offset]
                                 ? fn.call(scope, acc, targ[idx + offset], idx + offset, targ)
                                 : acc;
                     }, targ, arg2 || targ[0]);
         break;
 
+        case "foldr":
         case "reduceRight":
             targ 	= $$.copy(targ).reverse();
-            return 	ARRAY_METHOD("reduce", fn, targ, arg2);
+            return 	ARRAY_METHOD("reduce", targ, fn, arg2);
         break;
     }
 };
@@ -407,12 +467,194 @@ var PROC_ARR_ARGS = function(a) {
 	}
 };
 
+//  ##M_M
+//  
+//  Common handler for #min and #max methods.
+//
+//  @see    #min
+//  @see    #max
+//
+var M_M = function(cur, a, d) {
+    return a[0] ? ITERATOR(a[0], cur, Infinity * d, a[1]) 
+                : Math[d === -1 ? "max" : "min"].apply(Math, cur);
+};
+
+//  ##LIST_METHOD
+//
 //	These list methods only return a value if their operation is non-destructive.
 //	The current operating list is passed by reference, and as such does not need
 //	to be returned.
 //
 var LIST_METHOD = {
 
+    //  ##bump
+    //
+    //  Replace #original at #key with a new list.
+    //  Returns bumped #original.
+    //
+    bump    : function(cur, a, len, key) {
+        var o = ORIGINAL[key];
+        if(ORIGINAL[key] && $$.is(Array, cur)) {
+            ORIGINAL[key] = cur;
+        }
+        return o;
+    },
+
+    //  ##compact
+    //
+    compact : function(cur, a, len) {
+        var r = [];
+        while(len--) {
+            if(!cur[len]) {
+                cur.splice(len, 1);
+            }
+        }
+        
+        return cur;
+    },
+    
+    //  ##commit
+    //
+    //	Will replace the #original list with the current #active list.  
+    //  Returns previous #original.
+    //
+    commit	: function(cur, a, len, key) {
+        var o = ORIGINAL[key];
+    	ORIGINAL[key] = $$.copy(ACTIVE[key]);
+    	return a;
+    },
+    
+    //  ##compose
+    //
+    //  Returns the composed result of a list of functions processed tail to head.
+    //  Expects a single argument, which is the value to pass to the tail function.
+    //  NOTE that no checking is done of list member types. If any member is not a
+    //  function this will error.
+    //
+    compose		: function(cur, a, len) {
+    	var last = a;
+    	while(len--) {
+    		last = cur[len].apply(this, last);
+    	}
+
+    	return last;
+    },
+    
+    //  ##contains
+    //
+    //  Whether sent value exists in list
+    //
+    contains    : function(cur, a, len) {
+        var v = a[0];
+        while(len--) {
+            if(cur[len] === v) {
+                return true;
+            }
+        }
+        
+        return false;
+    },
+    
+	//	##diff
+	//
+	//	Difference between first list (#prime) and subsequent lists (members of #prime
+	//	list which do not exist in any other list). NOTE: all duplicate entries in the
+	//  #prime array are reduced to single entries, regardless of differences.
+	//
+	//	@see	#LIST_ACCESSOR
+	//	@return	{Array}
+	//
+    diff   : function(cur, a, len) {
+
+        var prime 	= $$.arrayToObject(cur);
+        var si;
+        var m;
+
+        PROC_ARR_ARGS(a);
+
+        while(m = a.shift()) {
+            si	= m.length;
+            while(si--) {
+                if(prime[m[si]] !== void 0) {
+                	delete prime[m[si]];
+                }
+            }
+        }
+
+        return $$.objectToArray(prime);
+    },
+    
+    //  ##find
+    //
+    //  Returns the first value matching iterator.
+    //
+    find    : function(cur, a) {
+        return cur[ITERATOR(a[0], cur)];
+    },
+    
+    //  ##findLast
+    //
+    //  Returns the last value matching iterator.
+    //
+    findLast    : function(cur, a) {
+        var c = $$.copy(cur).reverse();
+        return c[ITERATOR(a[0], c)];
+    },
+    
+    //  ##first
+    //
+    //  Regarding the first item, either fetch it by sending zero arguments,
+    //  or set it by sending a single item value. If the list does not
+    //  exist, a new list will be created.
+    //
+    first   : function(cur, a) {
+    	var c = a.length;
+        if(c) {
+        	while(c--) {
+        		cur.unshift(a[c]);
+        	}
+        } else {
+        	return cur.slice(0,1);
+        }
+
+        return cur;
+    },
+    
+    //  ##firstx
+    //
+    //  Regarding the first item, either fetch it by sending zero arguments,
+    //  or set it by sending a single item value.
+    //
+    //  Unlike #first, #firstx will *not* create a list if one does not exist.
+    //
+    firstx  : function(cur, a) {
+        return cur ? this.first(cur, a) : null;
+    },
+    
+    //  ##flatten
+    //
+    //  Reduces an array of nested arrays to a single depth.
+    //
+    //  @example    : #flatten(['frank', ['bob', 'lisa'], ['jill', ['tom', 'sally']]])
+    //              : ["sally", "tom", "jill", "lisa", "bob", "frank"]
+    //
+    flatten     : function(cur) {
+        var r = [];
+        var f = function(a) {
+            var i = a.length;
+            while(i--) {
+                if(typeof a[i] === "object") {
+                    f(a[i])
+                } else {
+                    r[r.length] = a[i];
+                }
+            }
+            return r;
+        }
+  
+        return f(cur);
+    },
+    
     //  ##get
     //
     //  Return item at sent index.
@@ -425,23 +667,7 @@ var LIST_METHOD = {
     get     : function(cur, a, len) {
         return cur[a[0] >= 0 ? a[0] : len + a[0]];
     },
-
-    //  ##set
-    //
-    //  Fetch item at sent index.
-    //
-    //  Indexes can be positive or negative, and are zero based.
-    //  `0` is first item, `1` is second, `-1` is last, `-2` is penultimate.
-    //  NOTE: There is no range checking done.
-    //
-    //  @argumentList
-    //      0: {Number}     The index.
-    //      1: {Mixed}      The value to set
-    //
-    set     : function(cur, a, len) {
-        return (cur[a[0] >= 0 ? a[0] : len + a[0]] = a[1]);
-    },
-
+    
     //  ##insert
     //
     //  Insert item before or after another item value.
@@ -470,293 +696,7 @@ var LIST_METHOD = {
 
         return cur;
     },
-
-    //  ##size
-    //
-    //  Returns the length of the list
-    //
-    size   	: function(cur, a, len) {
-        return len;
-    },
-
-    //  ##first
-    //
-    //  Regarding the first item, either fetch it by sending zero arguments,
-    //  or set it by sending a single item value. If the list does not
-    //  exist, a new list will be created.
-    //
-    first   : function(cur, a) {
-    	var c = a.length;
-        if(c) {
-        	while(c--) {
-        		cur.unshift(a[c]);
-        	}
-        } else {
-        	return cur.slice(0,1);
-        }
-
-        return cur;
-    },
-
-    //  ##firstx
-    //
-    //  Regarding the first item, either fetch it by sending zero arguments,
-    //  or set it by sending a single item value.
-    //
-    //  Unlike #first, #firstx will *not* create a list if one does not exist.
-    //
-    firstx  : function(cur, a) {
-        return cur ? this.first(cur, a) : null;
-    },
-
-    //  ##last
-    //
-    //  Regarding the last item, either fetch it by sending zero arguments,
-    //  or set it by sending a single item value. If the list does not
-    //  exist, a new list will be created.
-    //
-    last     : function(cur, a, len) {
-    	var c 	= a.length;
-    	var i	= 0;
-        if(c) {
-        	for(; i < c; i++) {
-        		cur.push(a[i]);
-        	}
-        } else {
-        	return cur.slice(len -2, 1);
-        }
-
-        return cur;
-    },
-
-    //  ##lastx
-    //
-    //  Regarding the last item, either fetch it by sending zero arguments,
-    //  or set it by sending a single item value. If the list does not
-    //  exist, a new list will be created.
-    //
-    //  Unlike #last, #lastx will *not* create a list if one does not exist.
-    //
-    lastx   : function(cur, a) {
-        return cur ? this.last(cur, a) : null;
-    },
-
-    //	##indexOf
-    //
-    indexOf		: function(cur, a, len, key) {
-
-    	var off	= a[1] || 0;
-
-    	while(off < len) {
-    		if(cur[off] === a[0]) {
-    			return off;
-    		}
-    		++off;
-    	}
-
-    	return -1;
-    },
-
-    //	##lastIndexOf
-    //
-    lastIndexOf		: function(cur, a, len, key) {
-
-        var off	= a[1] || 0;
-
-    	while(--len >= off) {
-    		if(cur[len] === a[0]) {
-    			return len;
-    		}
-    	}
-
-    	return -1;
-    },
-
-    //  ##range
-    //
-    //  Returns a range of elements.
-    //
-    //  Indexes can be positive or negative, and are zero based.
-    //  `0` is first item, `1` is second, `-1` is last, `-2` is penultimate.
-    //  NOTE: There is no range checking done.
-    //
-    //  @argumentList
-    //      0:      {Number} Start index.
-    //      [1]:    {Number} End index. If none sent, range is start->list end.
-    //
-    range   : function(cur, a, len) {
-    	var v 	= [	a[0] >= 0
-    				? a[0]
-    				: len + a[0] ,
-    				a[1]
-    				? a[1] >= 0
-    					? a[1]
-    					: len + a[1]
-    				: len].sort();
-
-        return cur.slice(v[0], v[1]);
-    },
-
-    //  ##remove
-    //
-    remove  : function(cur, a, len) {
-        var max     = a[0] === 0 ? len : Math.abs(a[0]);
-        var pos     = a[0] > 0;
-        var hits    = [];
-        var hLen    = 0;
-        var cLen    = len;
-
-        while(cLen--) {
-            if(cur[cLen] === a[1]) {
-                hLen = hits.push(cLen);
-                if(!pos && hLen === max) {
-                    break;
-                }
-            }
-        }
-
-        //  Sort and truncate. If negative (from right), there will be no effect,
-        //  as the length of hits is controlled in above loop. If positive (or zero)
-        //  will be sorted smaller->larger, and truncated to #max length.
-        //
-        hits.sort();
-        hLen 		= Math.min(hits.length, max);
-        hits.length = hLen;
-
-        while(hLen--) {
-            cur.splice(hits[hLen], 1);
-        }
-
-        return cur;
-    },
-
-    //  ##unique
-    //
-    //	Unique-ifys the #active list.
-    //
-    unique  	: function(cur, a, len) {
-		var map = {};
-		var c;
-		while(len--) {
-			c = map[cur[len]];
-			((map[cur[len]] = c ? c += 1 : 1) > 1) && cur.splice(len, 1);
-		}
-
-		return cur;
-    },
-
-    //  ##shuffle
-    //
-    //	Shuffle a list randomly.
-    //
-    //	Implements Fisher-Yates algorithm.
-    //	@see	http://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
-    //
-    shuffle		: function(cur, a, len) {
-		var s;
-		var r;
-
-		while(len) {
-			// Select one of the remaining and swap with current.
-			//
-			r = Math.floor(Math.random() * (len - 1));
-			s = cur[--len];
-			cur[len] = cur[r];
-			cur[r] = s;
-		}
-
-		return cur;
-    },
-
-    //  ##compose
-    //
-    //  Returns the composed result of a list of functions processed tail to head.
-    //  Expects a single argument, which is the value to pass to the tail function.
-    //  NOTE that no checking is done of list member types. If any member is not a
-    //  function this will error.
-    //
-    compose		: function(cur, a, len) {
-    	var last = a;
-    	while(len--) {
-    		last = cur[len].apply(this, last);
-    	}
-
-    	return last;
-    },
-
-    //  ##sequence
-    //
-    //  Returns the composed result of a list of functions processed head to tail.
-    //  Expects a single argument, which is the value to pass to the head function.
-    //  NOTE that no checking is done of list member types. If any member is not a
-    //  function this will error.
-    //
-    sequence	: function(cur, a, len) {
-    	var last    = a;
-    	var i       = 0
-    	while(i < len) {
-    		last = cur[len].apply(this, last);
-    		i++;
-    	}
-
-    	return last;
-    },
-
-	//	##union
-	//
-	//	Union of all lists (add unique members of all lists).
-	//
-	//	@see	#LIST_ACCESSOR
-	//	@return	{Array}
-	//
-    union  : function(cur, a, len) {
-
-        var map	= {};
-        var s;
-        var si;
-        var m;
-
-		a.push(cur);
-		PROC_ARR_ARGS(a);
-
-        while(m = a.shift()) {
-            si	= m.length;
-            while(si--) {
-            	map[m[si]] = 1;
-            }
-        }
-
-		return $$.objectToArray(map);
-    },
-
-	//	##diff
-	//
-	//	Difference between first list (#prime) and subsequent lists (members of #prime
-	//	list which do not exist in any other list).
-	//
-	//	@see	#LIST_ACCESSOR
-	//	@return	{Array}
-	//
-    diff   : function(cur, a, len) {
-
-        var prime 	= $$.arrayToObject(cur);
-        var si;
-        var m;
-
-        PROC_ARR_ARGS(a);
-
-        while(m = a.shift()) {
-            si	= m.length;
-            while(si--) {
-                if(prime[m[si]] !== void 0) {
-                	delete prime[m[si]];
-                }
-            }
-        }
-
-        return $$.objectToArray(prime);
-    },
-
+    
 	//	##intersect
 	//
 	//	Intersection of all lists (members which exist in all lists).
@@ -785,32 +725,20 @@ var LIST_METHOD = {
 
         return res;
     },
-
-    //  ##commit
+    
+    //  ##invoke
     //
-    //	Will replace the #original list with the current #active list.
+    //  Executes named method on list, passing named method any additional arguments
+    //  passed to #invoke.
     //
-    commit	: function(cur, a, len, key) {
-    	ORIGINAL[key] = $$.copy(ACTIVE[key]);
+    invoke  : function(cur, a, len) {
+        var m = $$[a.shift()];
+        while(len--) {
+            cur[len] = m.apply($$, [cur[len]].concat(a));
+        }
+        return cur;
     },
-
-    //  ##reset
-    //
-    //	Will replace the #active list with the #original list.
-    //
-    reset	: function(cur, a, len, key) {
-    	ACTIVE[key] = $$.copy(ORIGINAL[key]);
-    },
-
-    //  ##unset
-    //
-    //	Will remove a key (a list) entirely.
-    //
-    unset	: function(cur, a, len, key) {
-        delete ACTIVE[key];
-    	delete ORIGINAL[key];
-    },
-
+    
     //  ##iterator
     //
     //	Create a basic iterator for a list.
@@ -878,6 +806,64 @@ var LIST_METHOD = {
     		}
     	};
     },
+    
+    //  ##last
+    //
+    //  Regarding the last item, either fetch it by sending zero arguments,
+    //  or set it by sending a single item value. If the list does not
+    //  exist, a new list will be created.
+    //
+    last     : function(cur, a, len) {
+    	var c 	= a.length;
+    	var i	= 0;
+        if(c) {
+        	for(; i < c; i++) {
+        		cur[cur.length] = a[i];
+        	}
+        } else {
+        	return cur.slice(len -2, 1);
+        }
+
+        return cur;
+    },
+
+    //  ##lastx
+    //
+    //  Regarding the last item, either fetch it by sending zero arguments,
+    //  or set it by sending a single item value. If the list does not
+    //  exist, a new list will be created.
+    //
+    //  Unlike #last, #lastx will *not* create a list if one does not exist.
+    //
+    lastx   : function(cur, a) {
+        return cur ? this.last(cur, a) : null;
+    },
+    
+    //  ##max
+    //
+    //  Returns the maximum value in list. 
+    //
+    //  Arguments:
+    //      0:  {Function}      [it]     An iterator
+    //      1:  {Object}        [scp]    Scope to run iterator in.
+    //(fn, targ, acc, ctxt)
+    max : function(cur, a) {
+        return a[0] ? ITERATOR(a[0], cur, -Infinity, a[1]) 
+                    : Math.max.apply(Math, cur);
+    },
+    
+    //  ##min
+    //
+    //  Returns the minimum value in list. 
+    //
+    //  Arguments:
+    //      0:  {Function}      [it]     An iterator
+    //      1:  {Object}        [scp]    Scope to run iterator in.
+    //
+    min : function(cur, a) {
+        return a[0] ? ITERATOR(a[0], cur, Infinity, a[1]) 
+                    : Math.min.apply(Math, cur);
+    },
 
     //  ##paginate
     //
@@ -916,11 +902,249 @@ var LIST_METHOD = {
     	}
     	return CUR_PAGE;
     },
+    
+    //  ##pluck
+    //
+    //  Given a list of objects, will return a list of the values at given
+    //  index in each object.
+    //
+    //  @example    .pluck([    {user: 'tom', state: 'NY'}, 
+    //                          {user: 'dick', state: 'NJ'},
+    //                          {user: 'harry', state: 'ND'}], "state");
+    //              // ['NY','NJ','ND']
+    //
+    pluck   : function(cur, a, len) {
+        var c;
+        var p = a[0];
+        var r = [];
+        while(len--) {
+            c = cur[len];
+            if(typeof c === "object" && c === p) {
+                r[r.length] = p;
+            }
+        }
+        
+        return r;
+    },
+    
+    //  ##range
+    //
+    //  Returns a range of elements.
+    //
+    //  Indexes can be positive or negative, and are zero based.
+    //  `0` is first item, `1` is second, `-1` is last, `-2` is penultimate.
+    //  NOTE: There is no range checking done.
+    //
+    //  @argumentList
+    //      0:      {Number} Start index.
+    //      [1]:    {Number} End index. If none sent, range is start->list end.
+    //
+    range   : function(cur, a, len) {
+    	var v 	= [	a[0] >= 0
+    				? a[0]
+    				: len + a[0] ,
+    				a[1]
+    				? a[1] >= 0
+    					? a[1]
+    					: len + a[1]
+    				: len].sort();
+
+        return cur.slice(v[0], v[1]);
+    },
+    
+    //  ##reject
+    //
+    //  Return array of values which do *not* match iterator. Opposite of #filter.
+    //
+    reject  : function(cur, a, len) {
+        var fn  = a[0];
+        return  ITERATOR(function(elem, idx, targ, acc) {
+                    !fn.call(this, elem, idx, targ) && acc.push(elem);
+                    return acc;
+                }, cur, [], a[1]);
+    },
+
+    //  ##remove
+    //
+    //  Removes #c(ount) members of list === #v(alue).  
+    //  #c > 0: moving from head to tail.
+    //  #c < 0: moving from tail to head.
+    //  #c = 0: Remove all.
+    //
+    //  Arguments
+    //      0:  {Number}    #c  The number of instances of #v to remove
+    //      1:  {Mixed}     #v  The value to remove
+    //
+    remove  : function(cur, a, len) {
+        var max     = a[0] === 0 ? len : Math.abs(a[0]);
+        var pos     = a[0] > 0;
+        var hits    = [];
+        var hLen    = 0;
+        var cLen    = len;
+
+        while(cLen--) {
+            if(cur[cLen] === a[1]) {
+                hLen = hits.push(cLen);
+                if(!pos && hLen === max) {
+                    break;
+                }
+            }
+        }
+
+        //  Sort and truncate. If negative (from right), there will be no effect,
+        //  as the length of hits is controlled in above loop. If positive (or zero)
+        //  will be sorted smaller->larger, and truncated to #max length.
+        //
+        hits.sort();
+        hLen 		= Math.min(hits.length, max);
+        hits.length = hLen;
+
+        while(hLen--) {
+            cur.splice(hits[hLen], 1);
+        }
+
+        return cur;
+    },
+    
+    //  ##reset
+    //
+    //	Will replace the #active list with the #original list.
+    //  Returns last #active.
+    //
+    reset	: function(cur, a, len, key) {
+        var a = ACTIVE[key];
+    	ACTIVE[key] = $$.copy(ORIGINAL[key]);
+    	return a;
+    },
+
+    //  ##set
+    //
+    //  Fetch item at sent index.
+    //
+    //  Indexes can be positive or negative, and are zero based.
+    //  `0` is first item, `1` is second, `-1` is last, `-2` is penultimate.
+    //  NOTE: There is no range checking done.
+    //
+    //  @argumentList
+    //      0: {Number}     The index.
+    //      1: {Mixed}      The value to set
+    //
+    set     : function(cur, a, len) {
+        return (cur[a[0] >= 0 ? a[0] : len + a[0]] = a[1]);
+    },
+
+    //  ##size
+    //
+    //  Returns the length of the list
+    //
+    size   	: function(cur, a, len) {
+        return len;
+    },
+
+    //  ##shuffle
+    //
+    //	Shuffle a list randomly.
+    //
+    //	Implements Fisher-Yates algorithm.
+    //	@see	http://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
+    //
+    shuffle		: function(cur, a, len) {
+		var s;
+		var r;
+
+		while(len) {
+			// Select one of the remaining and swap with current.
+			//
+			r = Math.floor(Math.random() * (len - 1));
+			s = cur[--len];
+			cur[len] = cur[r];
+			cur[r] = s;
+		}
+
+		return cur;
+    },
+
+    //  ##sequence
+    //
+    //  Returns the composed result of a list of functions processed head to tail.
+    //  Expects a single argument, which is the value to pass to the head function.
+    //  NOTE that no checking is done of list member types. If any member is not a
+    //  function this will error.
+    //
+    sequence	: function(cur, a, len) {
+    	var last    = a;
+    	var i       = 0
+    	while(i < len) {
+    		last = cur[len].apply(this, last);
+    		i++;
+    	}
+
+    	return last;
+    },
 
     //  ##totalPages
     //
     totalPages	: function(cur, a, len) {
     	return Math.ceil(len / PAGINATION);
+    },
+    
+    //  ##unique
+    //
+    //	Unique-ifys the #active list.
+    //
+    unique  	: function(cur, a, len) {
+		var map = {};
+		var c;
+		while(len--) {
+			c = map[cur[len]];
+			((map[cur[len]] = c ? c += 1 : 1) > 1) && cur.splice(len, 1);
+		}
+
+		return cur;
+    },
+
+	//	##union
+	//
+	//	Union of all lists (add unique members of all lists).
+	//
+	//	@see	#LIST_ACCESSOR
+	//	@return	{Array}
+	//
+    union  : function(cur, a, len) {
+
+        var map	= {};
+        var s;
+        var si;
+        var m;
+
+		a[a.length] = cur;
+		PROC_ARR_ARGS(a);
+
+        while(m = a.shift()) {
+            si	= m.length;
+            while(si--) {
+            	map[m[si]] = 1;
+            }
+        }
+
+		return $$.objectToArray(map);
+    },
+
+    //  ##unset
+    //
+    //	Will remove a key (a list) entirely, returning an object containing
+    //  list's last #active and last #original
+    //
+    unset	: function(cur, a, len, key) {
+        var r = {
+            active      : ACTIVE[key],
+            original    : ORIGINAL[key]
+        }
+        
+        delete ACTIVE[key];
+    	delete ORIGINAL[key];
+    	
+    	return r;
     }
 }
 
@@ -964,15 +1188,18 @@ var LIST_ACCESSOR = function(m, key) {
 		ORIGINAL[key] = $$.copy(cur,1);
 	}
 
-   	return result || cur;
+    //  Return any truthy values. Return `false`, as that is a valid result. We return #cur
+    //  if any other falsy result is received.
+    //
+    return result === false ? false : result || cur;
 };
 
 //	Core array methods.
 //
 while(ARRAY_M.length) {
 	(function(m) {
-        $$[m] = function(targ, fn, scope) {
-            return ARRAY_METHOD(m, fn, targ, scope);
+        $$[m] = function(targ, fn, scope, a3) {
+            return ARRAY_METHOD(m, targ, fn, scope, a3);
         }
     })(ARRAY_M.pop());
 }

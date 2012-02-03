@@ -62,13 +62,73 @@
 	console.log(L.lastIndexOf("pages", "z"));
 	console.log(L.indexOf(["eeny","meeny","miney","moe"], "miney", 2));
 
-	console.log(L.map(function(e) {
+    console.log("> map");
+	console.log(L.map([1,2,3,4,5], function(e) {
 	    return e += 1;
-	}, [1,2,3,4,5]));
+	}));
 
-	console.log(L.map(function(e) {
+	console.log(L.map("pages", function(e) {
 	    return e += 1;
-	}, "pages"));
+	}));
+
+    console.log("> every");
+	console.log(L.every([1,1,1,1,1,1,1], function(e) {
+	    return e === 1;
+	}));
+	
+	console.log("> max");
+	console.log(L.max([1,2,3,5,4]));
+	console.log(L.max([1,2,3,5,4], function(e, i, targ, acc) {
+	    return 3;
+	}));
+	console.log(L.max(["one", "two", "three", "four", "foo", "bar"], function(e, i, targ, acc) {
+	    return e > acc ? e : acc;
+	}));
+
+	console.log("> min");
+	console.log(L.min([1,2,3,5,4]));
+	console.log(L.min([1,2,3,5,4], function(e, i, targ, acc) {
+	    return 3;
+	}));
+	console.log(L.min(["one", "two", "three", "four", "foo", "bar"], function(e, i, targ, acc) {
+	    return e < acc ? e : acc;
+	}));
+	
+	console.log("> find");
+	console.log(L.find("pages", function(e, i, t) {
+	    return e === "d";
+	}));
+
+	console.log("> findLast");
+	console.log(L.findLast(["a","b","c","d","e","d","b"], function(e, i, t) {
+	    return e === "b";
+	}));
+	
+	console.log("> compact");
+	console.log(L.compact([1,null,2,2,3,0,4,undefined,5,5,null,false,8]));
+	
+	console.log("> contains");
+	console.log(L.contains([1,2,3,4,5], "4"));
+	console.log(L.contains([1,2,3,4,5], 4));
+	
+	console.log("> invoke");
+	console.log(L.invoke([[1,2,3],[4,5,6],[7,8,9]], "max"));
+	console.log(L.invoke([[1,2,3],[4,5,6],[7,8,9]], "reduce", function(acc, e, i, t) {
+	    return acc + e;
+	}))
+	
+	console.log("> filter");
+	console.log(L.filter([1,2,3,4,5,6,7,8], function(e, i, t) {
+	    return e % 2;
+	}));
+
+	console.log("> reject");
+	console.log(L.reject([1,2,3,4,5,6,7,8], function(e, i, t) {
+	    return e % 2;
+	}, {foo:1}));
+	
+	console.log("> flatten");
+	console.log(L.flatten(['frank', ['bob', 'lisa'], ['jill', ['tom', 'sally']]]));
 
 	console.log("PAGES: ");
 	console.log(L.range("pages", 0));
