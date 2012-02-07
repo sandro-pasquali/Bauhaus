@@ -31,13 +31,16 @@ var LIST_M = [
     "contains",
     "diff",
     "size",
-    "find",
+    "findFirst",
     "findLast",
     "first",
     "firstx",
     "flatten",
     "get",
+    "group",
     "insert",
+    "insertBefore",
+    "insertAfter",
     "intersect",
     "invoke",
     "iterator",
@@ -55,10 +58,14 @@ var LIST_M = [
     "sequence",
     "set",
     "shuffle",
+    "search",
+    "sortBy",
+    "sortedIndex",
     "totalPages",
     "union",
     "unique",
-    "unset"
+    "unset",
+    "zip"
 ];
 
 var ORIGINAL 	= [];
@@ -69,6 +76,10 @@ var CUR_PAGE	= 1;
 
 var	OP_TO_STRING	= Object.prototype.toString;
 var AP_SLICE		= Array.prototype.slice;
+var FUNC_PROTO      = Function.prototype;
+
+var M_MIN       = Math.min;
+var M_MAX       = Math.max;
 
 var UNIQUE_ID	= 1;
 
@@ -76,6 +87,176 @@ var UNIQUE_ID	= 1;
 //	`module` or `window` context, extended with methods in #ARRAY_M and #LIST_M.
 //
 var $$ = {
+    
+    //  #after
+    //
+    //  Returns a function whose callback will only execute once the function has
+    //  been called n times.
+    //
+    //  @argumentList
+    //      0   : {Number}      The call instance on which the callback fires.
+    //      1   : {Function}    The callback to fire
+    //      [2] : {Object}      A context to fire callback in.
+    //
+    //  @example    var confirm = after(notes.length, function() { alert("All notes saved"); })
+    //              each(notes, function(note) {
+    //                  note.asyncSave({callback: confirm});
+    //              });
+    //
+    after   : function(count, cb, ctxt) {
+        return !count ? cb : function() {
+            if(!--count) {
+                return cb.apply(ctxt, arguments);
+            }
+        }
+    },
+    
+	//	##argsToArray
+	//
+	//	Converts an arguments object to an array.
+	//
+	//	@param	{Arguments}		a
+	//	@param	{Number}		[offset]	Index to begin plucking arguments. Default 0.
+	//	@param	{Number}		[end]		Index to stop plucking arguments. Default to end.
+	//
+    argsToArray : function(a, offset, end) {
+        return AP_SLICE.call(a, offset || 0, end);
+    },    
+    
+    //	##arrayToObject
+    //
+    //	Converts an array to an object
+    //
+    //	@param	{Array}		a	The array to convert.
+    //
+    //	@example	["a","b","c"]	->	{a: 0, b: 1, c: 2}
+    //
+    arrayToObject  	: function(a) {
+        var len = a.length;
+        var ob 	= {};
+
+        while(len--) {
+            ob[a[len]] = len;
+        }
+
+        return ob;
+    },
+    
+	//  ##bind
+	//
+	//  Ensure the execution context of a function.
+	//
+	bind    : function(f, c) {
+	    var a = $.argsToArray(arguments, 2);
+	    return function() {
+	        return f.apply(c, a.concat($.argsToArray(arguments)));
+	    }
+	},
+	
+	//  ##bindAll
+	//
+	//  Ensures that the execution context of all (or some) of the methods
+	//  in an object remains the object itself, regardless of the ultimate context
+	//  within which all (or some) of the object methods are called.
+    //
+    //  @argumentList
+    //      0       : {Object}  The object containing methods to bind.
+    //      [1..n]  : {String}  Any number of object method names. If none sent, all 
+    //                          object methods are bound.
+    //
+    bindAll : function(obj) {;
+        var a = $.argsToArray(arguments, 1);
+        var f;
+        $$.each(a.length ? a : $$.objectToArray(obj), function(e, i) {
+            f = obj[e];
+            $$.is(Function, f) && (obj[e] = $$.bind(f, obj));
+        }, obj);
+    },
+    
+	//	##compiledFunction
+	//
+	//	Returns a function F which will execute #fbody within the context F is called.
+	//
+	//	@param	{String}	fbody	The body of the function to be created.
+	//
+	//	@example:	var f = scopedFunction("console.log(foo)");
+	//				f.apply/call({ foo: "bar" }); // `bar`
+	//
+	compiledFunction 	: function(fbody) {
+		return Function(
+			"with(this) { return (function(){" + fbody + "})(); };"
+		)
+	},
+	
+    //	##copy
+    //
+    //	Copies an object.
+    //
+    //	@param	{Mixed}		o		The copy candidate.
+    //	@param	{Boolean}	[deep]	Whether do a deep copy.
+    //
+    copy  	: function(o, deep) {
+        var cp = function(ob) {
+            var fin;
+            var p;
+
+            if(typeof ob !== "object" || ob === null || ob.$n) {
+                return ob;
+            }
+
+			if(!deep) {
+				return ob.slice(0);
+			}
+
+            try {
+                fin = new ob.constructor;
+            } catch(e) {
+                return ob;
+            }
+
+            for(p in ob) {
+                fin[p] = cp(ob[p], deep);
+            }
+
+            return fin;
+        }
+
+        return cp(o);
+    },
+
+	//	##escape
+	//
+	//	Escapes HTML text, making it suitable for insertion into page flow.
+	//
+	//	@param	{String}	text	The text to escape.
+	//
+	//	@see 	http://davidchambersdesign.com/escaping-html-in-javascript/
+	//
+	escape	: function(text) {
+		return text.replace(/[&<>"'`]/g, function(chr) {
+    		return '&#' + chr.charCodeAt(0) + ';';
+  		});
+	},
+    
+	//  ##extend
+	//
+	//  Extends #bauhaus.
+	//
+    extend  : function(m) {
+        $$[m] = function() {
+
+            //	Methods have varying functional signatures.
+            //
+            var a = $$.argsToArray(arguments);
+
+            //	#LIST_ACCESSOR expects method name as first argument.
+            //
+            a.unshift(m);
+
+            return LIST_ACCESSOR.apply($$, a);
+        };
+    }, 
+    
 	// 	##is
 	//
 	//	Whether #val is of #type. For most objects the constructor is
@@ -126,57 +307,27 @@ var $$ = {
 		}
 	},
 
-	//	##uniqueId
+	//	##memoize
 	//
-	//	Simply an incremented number + a prefix. You're safe until about +/- 9007199254740992.
+	//	@param		{Function}		f		The function to memoize.
+	//	@param		{Object}		[scp]	The scope to execute the function within.
 	//
-	//	@param	{String}	[pref]		A prefix for unique id. Defaults to "_"(underscore)
-	//
-	uniqueId	: function(pref) {
-		++UNIQUE_ID;
-		return (pref || "_") + UNIQUE_ID;
+	memoize	: function(f, scp) {
+		var m 	= {};
+		return function() {
+		    var a = $$.argsToArray(arguments);
+			//	Key joins arguments on escape character as delimiter which should be safe.
+			//
+			var k = a.join("\x1B");
+			return m.hasOwnProperty(k) || (m[k] = f.apply(scp, a));
+		};
 	},
 
-	//	##escape
+	//  ##noop
 	//
-	//	Escapes HTML text, making it suitable for insertion into page flow.
+	//  A benign anonymous function.
 	//
-	//	@param	{String}	text	The text to escape.
-	//
-	//	@see 	http://davidchambersdesign.com/escaping-html-in-javascript/
-	//
-	escape	: function(text) {
-		return text.replace(/[&<>"'`]/g, function(chr) {
-    		return '&#' + chr.charCodeAt(0) + ';';
-  		});
-	},
-
-	//	##boundFunction
-	//
-	//	Returns a function F which will execute #fbody within the context F is called.
-	//
-	//	@param	{String}	fbody	The body of the function to be created.
-	//
-	//	@example:	var f = scopedFunction("console.log(foo)");
-	//				f.apply/call({ foo: "bar" }); // `bar`
-	//
-	boundFunction 	: function(fbody) {
-		return Function(
-			"with(this) { return (function(){" + fbody + "})(); };"
-		)
-	},
-
-	//	##argsToArray
-	//
-	//	Converts an arguments object to an array.
-	//
-	//	@param	{Arguments}		a
-	//	@param	{Number}		[offset]	Index to begin plucking arguments. Default 0.
-	//	@param	{Number}		[end]		Index to stop plucking arguments. Default to end.
-	//
-    argsToArray : function(a, offset, end) {
-        return AP_SLICE.call(a, offset || 0, end);
-    },
+	noop    : function(){},
 
     //	##objectToArray
     //
@@ -204,79 +355,15 @@ var $$ = {
         return r;
     },
 
-    //	##arrayToObject
-    //
-    //	Converts an array to an object
-    //
-    //	@param	{Array}		a	The array to convert.
-    //
-    //	@example	["a","b","c"]	->	{a: 0, b: 1, c: 2}
-    //
-    arrayToObject  	: function(a) {
-        var len = a.length;
-        var ob 	= {};
-
-        while(len--) {
-            ob[a[len]] = len;
-        }
-
-        return ob;
-    },
-
-    //	##copy
-    //
-    //	Copies an object.
-    //
-    //	@param	{Mixed}		o		The copy candidate.
-    //	@param	{Boolean}	[deep]	Whether do a deep copy.
-    //
-    copy  	: function(o, deep) {
-        var cp = function(ob) {
-            var fin;
-            var p;
-
-            if(typeof ob !== "object" || ob === null || ob.$n) {
-                return ob;
-            }
-
-			if(!deep) {
-				return ob.slice(0);
-			}
-
-            try {
-                fin = new ob.constructor;
-            } catch(e) {
-                return ob;
-            }
-
-            for(p in ob) {
-                fin[p] = cp(ob[p], deep);
-            }
-
-            return fin;
-        }
-
-        return cp(o);
-    },
-
-	//	##memoize
+	//	##uniqueId
 	//
-	//	@param		{Function}		f		The function to memoize.
-	//	@param		{Object}		[scp]	The scope to execute the function within.
+	//	Simply an incremented number + a prefix. You're safe until about +/- 9007199254740992.
 	//
-	memoize	: function(f, scp) {
-
-		scp		= scp || $$;
-
-		var m 	= {};
-		var aj	= Array.prototype.join;
-
-		return function() {
-			//	Key joins arguments on escape character as delimiter which should be safe.
-			//
-			var k = aj.call(arguments, "\x1B");
-			return m.hasOwnProperty(k) || (m[k] = f.apply(scp, arguments));
-		};
+	//	@param	{String}	[pref]		A prefix for unique id. Defaults to "_"(underscore)
+	//
+	uniqueId	: function(pref) {
+		++UNIQUE_ID;
+		return (pref || "_") + UNIQUE_ID;
 	}
 };
 
@@ -414,7 +501,7 @@ nat = false;
         
         case "lastIndexOf":       
             return  nat ? targ.lastIndexOf(fn, arg2 === void 0 ? targ.length : arg2)
-                        : ARRAY_METHOD("indexOf", $$.copy(targ), fn, arg2);
+                        : $$.indexOf($$.copy(targ), fn, arg2);
         break;
 
         //	Note how the #reduce methods change the argument order passed to the
@@ -439,16 +526,19 @@ nat = false;
 
         case "foldr":
         case "reduceRight":
-            targ 	= $$.copy(targ).reverse();
-            return 	ARRAY_METHOD("reduce", targ, fn, arg2);
+            return $$.reduce($$.copy(targ).reverse(), fn, arg2);
         break;
     }
 };
 
 //	##PROC_ARR_ARGS
 //
-//	Ensures that sent array members are each arrays. Note that the sent array
-//	reference is modified, so there is no return value.
+//	Ensures that sent array members are each arrays. For each member:
+//  If array, do nothing;
+//  If string, check if exists ACTIVE[string], use if so;
+//  Else, empty array ([]).
+//
+//  Note that the sent array reference itself is modified, so there is no return value.
 //
 //	@see	#union
 //	@see	#intersect
@@ -467,17 +557,33 @@ var PROC_ARR_ARGS = function(a) {
 	}
 };
 
-//  ##M_M
-//  
-//  Common handler for #min and #max methods.
+//  ##SORTER
 //
-//  @see    #min
-//  @see    #max
+//  Creates reusable sort functions.
 //
-var M_M = function(cur, a, d) {
-    return a[0] ? ITERATOR(a[0], cur, Infinity * d, a[1]) 
-                : Math[d === -1 ? "max" : "min"].apply(Math, cur);
-};
+//  @see    #sort
+//  @href   http://stackoverflow.com/questions/979256/how-to-sort-an-array-of-javascript-objects
+//
+var SORTER = $$.memoize(function(field, primer, descending) {
+    var key = function(x) {
+        return primer ? primer(x[field]) : x[field];
+    };
+    
+    return function(a,b) {
+       var left = key(a);
+       var right = key(b);
+       //   [-1,1][+!!reverse] : Cast truth value of #descending(!!) to a number(+) which 
+       //   will be (f || t) <- (0 || 1) <- [-1,1]. This function is intended as an
+       //   Array.sort argument, which sorts based on what its sort method returns:
+       //   -1  : left < right
+       //   1   : left > right
+       //   0   : left == right
+       //   Normally sorted ascending. By passing #descending, we multiply by -1, 
+       //   inverting above table.
+       //
+       return ((left < right) ? -1 : (left > right) ? 1 : 0) * [1,-1][+!!descending];                  
+    }
+});
 
 //  ##LIST_METHOD
 //
@@ -501,6 +607,8 @@ var LIST_METHOD = {
     },
 
     //  ##compact
+    //
+    //  Removes all falsy values from list: false, null, 0, "", undefined, NaN.
     //
     compact : function(cur, a, len) {
         var r = [];
@@ -545,14 +653,7 @@ var LIST_METHOD = {
     //  Whether sent value exists in list
     //
     contains    : function(cur, a, len) {
-        var v = a[0];
-        while(len--) {
-            if(cur[len] === v) {
-                return true;
-            }
-        }
-        
-        return false;
+        return $$.search(cur, a[0]) !== -1;
     },
     
 	//	##diff
@@ -584,11 +685,11 @@ var LIST_METHOD = {
         return $$.objectToArray(prime);
     },
     
-    //  ##find
+    //  ##findFirst
     //
     //  Returns the first value matching iterator.
     //
-    find    : function(cur, a) {
+    findFirst    : function(cur, a) {
         return cur[ITERATOR(a[0], cur)];
     },
     
@@ -638,8 +739,9 @@ var LIST_METHOD = {
     //  @example    : #flatten(['frank', ['bob', 'lisa'], ['jill', ['tom', 'sally']]])
     //              : ["sally", "tom", "jill", "lisa", "bob", "frank"]
     //
-    flatten     : function(cur) {
+    flatten     : function(cur, a, len, key) {
         var r = [];
+        var c;
         var f = function(a) {
             var i = a.length;
             while(i--) {
@@ -652,7 +754,11 @@ var LIST_METHOD = {
             return r;
         }
   
-        return f(cur);
+        c = f(cur);
+        if(key) {
+            ACTIVE[key] = c;
+        }
+        return c;
     },
     
     //  ##get
@@ -661,11 +767,38 @@ var LIST_METHOD = {
     //
     //  Indexes can be positive or negative, and are zero based.
     //  `0` is first item, `1` is second, `-1` is last, `-2` is penultimate.
+    //
     //  @argumentList
-    //      0: {Number}     The index.
+    //      [0]: {Number}   The index. If no index is sent (ie. no arguments are sent),
+    //                      #cur is returned, which makes this an alias for ##range
     //
     get     : function(cur, a, len) {
         return cur[a[0] >= 0 ? a[0] : len + a[0]];
+    },
+    
+    //  ##group
+    //
+    //  Returns a grouping of list members based on results of passed iterator method.
+    //
+    //  @argumentList
+    //      0       : {Mixed}     Either an iterator function, or a string property.
+    //      [1]     : {Object}    A scope to execute iterator within.
+    //
+    //  @example    #group([1.3, 2.1, 2.4], function(num){ return Math.floor(num); }))
+    //                  { 1: [1.3], 2: [2.1, 2.4]}
+    //              #group(['one', 'two', 'three'], "length")
+    //                  { 3: ["one", "two"], 5: ["three"] }
+    //
+    group   : function(cur, a, len) {
+        var i = a[0]
+        var f = $$.is(String, i) ? function(elem) {
+            return elem[i];
+        } : i;
+        return ITERATOR(function(elem, idx, targ, acc) {
+            var r = f.call(this, elem, idx, targ);
+            (acc[r] || (acc[r] = [])).push(elem);
+            return acc;
+        }, cur, {}, a[1]);
     },
     
     //  ##insert
@@ -696,6 +829,22 @@ var LIST_METHOD = {
 
         return cur;
     },
+    
+    //  ##insertBefore
+    //
+    //  Shortcut to #insert("before", ...);
+    //
+    insertBefore    : function(cur, a, len) {
+        return $$.insert(cur, "before", a[0]);
+    },
+    
+    //  ##insertAfter
+    //
+    //  Shortcut to #insert("after", ...);
+    //
+    insertAfter     : function(cur, a, len) {
+        return $$.insert(cur, "after", a[0]);
+    },    
     
 	//	##intersect
 	//
@@ -849,7 +998,7 @@ var LIST_METHOD = {
     //(fn, targ, acc, ctxt)
     max : function(cur, a) {
         return a[0] ? ITERATOR(a[0], cur, -Infinity, a[1]) 
-                    : Math.max.apply(Math, cur);
+                    : M_MAX.apply(Math, cur);
     },
     
     //  ##min
@@ -862,20 +1011,34 @@ var LIST_METHOD = {
     //
     min : function(cur, a) {
         return a[0] ? ITERATOR(a[0], cur, Infinity, a[1]) 
-                    : Math.min.apply(Math, cur);
+                    : M_MIN.apply(Math, cur);
     },
 
     //  ##paginate
     //
+    //  Set the page width.
+    //
+    //  @see    #page
+    //  @see    #totalPages
+    //  
     paginate	: function(cur, a, len) {
-    	PAGINATION = Math.max(0, a[0]);
+    	PAGINATION = M_MAX(0, a[0]);
     },
 
 	//	##page
 	//
 	//	Returns the requested page array if #a is set, or the current page # if not.
 	//
-	//	@example	Terrace.lists.page(3) // [
+	//  @argumentList
+	//      [0]     : {Number}  Page index. Returns page at page index. If undefined, returns
+	//                          the current page index.
+	//  
+	//	@example	#page(3)    // ["foo","bar","baz"]
+	//              #page()     // 3
+	//
+	//  @see    #paginate
+	//  @see    #totalPages
+	//
     page	: function(cur, a, len) {
 
     	var p 		= a[0];
@@ -889,13 +1052,13 @@ var LIST_METHOD = {
 		//
     	if(p) {
 			if(p < 0) {
-				p = Math.max(pages + p +1, 1);
+				p = M_MAX(pages + p +1, 1);
 			} else {
-				p = Math.min(p, pages);
+				p = M_MIN(p, pages);
 			}
 
-			start 	= Math.min((p-1) * PAGINATION, len);
-			end		= Math.min(start + PAGINATION, len);
+			start 	= M_MIN((p-1) * PAGINATION, len);
+			end		= M_MIN(start + PAGINATION, len);
 
 			CUR_PAGE = p;
 			return cur.slice(start, end);
@@ -914,14 +1077,16 @@ var LIST_METHOD = {
     //              // ['NY','NJ','ND']
     //
     pluck   : function(cur, a, len) {
-        var c;
         var p = a[0];
         var r = [];
-        while(len--) {
-            c = cur[len];
-            if(typeof c === "object" && c === p) {
-                r[r.length] = p;
+        var i = 0;
+        var c;
+        while(i < len) {
+            c = cur[i];
+            if(typeof c === "object") {
+                r[r.length] = c[p];
             }
+            i++
         }
         
         return r;
@@ -933,11 +1098,12 @@ var LIST_METHOD = {
     //
     //  Indexes can be positive or negative, and are zero based.
     //  `0` is first item, `1` is second, `-1` is last, `-2` is penultimate.
-    //  NOTE: There is no range checking done.
+    //  NOTE: There is no range checking done. 
     //
     //  @argumentList
-    //      0:      {Number} Start index.
-    //      [1]:    {Number} End index. If none sent, range is start->list end.
+    //      [0]:    {Number}    Start index. If no arguments are sent, the entire
+    //                          array is returned.
+    //      [1]:    {Number}    End index. If none sent, range is start->end.
     //
     range   : function(cur, a, len) {
     	var v 	= [	a[0] >= 0
@@ -996,7 +1162,7 @@ var LIST_METHOD = {
         //  will be sorted smaller->larger, and truncated to #max length.
         //
         hits.sort();
-        hLen 		= Math.min(hits.length, max);
+        hLen 		= M_MIN(hits.length, max);
         hits.length = hLen;
 
         while(hLen--) {
@@ -1015,6 +1181,24 @@ var LIST_METHOD = {
         var a = ACTIVE[key];
     	ACTIVE[key] = $$.copy(ORIGINAL[key]);
     	return a;
+    },
+    
+    //  ##sequence
+    //
+    //  Returns the composed result of a list of functions processed head to tail.
+    //  Expects a single argument, which is the value to pass to the head function.
+    //  NOTE that no checking is done of list member types. If any member is not a
+    //  function this will error.
+    //
+    sequence	: function(cur, a, len) {
+    	var last    = a;
+    	var i       = 0
+    	while(i < len) {
+    		last = cur[len].apply(this, last);
+    		i++;
+    	}
+
+    	return last;
     },
 
     //  ##set
@@ -1063,26 +1247,55 @@ var LIST_METHOD = {
 
 		return cur;
     },
-
-    //  ##sequence
+    
+    //  ##search
     //
-    //  Returns the composed result of a list of functions processed head to tail.
-    //  Expects a single argument, which is the value to pass to the head function.
-    //  NOTE that no checking is done of list member types. If any member is not a
-    //  function this will error.
+    //  Binary search on a sorted array (NOTE: *sorted*).
+    //  Use to fetch either the index of a value, or the index where the value should be
+    //  inserted in order to keep the array ordered.
+    //  
+    //  @argumentList  
+    //      0   : {Mixed}   The value to search for.  You may also pass an iterator function,
+    //                      whose return value will then determine sort ranking.
+    //      [1] : {Boolean} Whether to return the sorted index.
     //
-    sequence	: function(cur, a, len) {
-    	var last    = a;
-    	var i       = 0
-    	while(i < len) {
-    		last = cur[len].apply(this, last);
-    		i++;
-    	}
-
-    	return last;
+    //  @href   http://jsfromhell.com/array/search
+    //
+    search : function(cur, a, len) {
+        var low = -1;
+        var v   = a[0];
+        var i   = a[1];
+        var mid;
+        while(len - low > 1) {
+            if(cur[mid = len + low >> 1] < v) {
+                low = mid;
+            } else {
+                len = mid;
+            }
+        }
+        return cur[len] != v ? i ? len : -1 : len;
     },
-
+    
+    //  ##sortBy
+    //
+    sortBy  : function(cur, a){
+        cur.sort(SORTER(a[0], a[1], a[2]));
+        return cur;
+    },
+    
+    //  ##sortedIndex
+    //
+    //  Shortcut for #search(val, true), which returns sorted index.
+    //
+    sortedIndex : function(cur, a, len) {
+        return $$.search(cur, a[0], true);
+    },
+    
     //  ##totalPages
+    //
+    //  The total number of pages in the current list.
+    //
+    //  @see    #paginate
     //
     totalPages	: function(cur, a, len) {
     	return Math.ceil(len / PAGINATION);
@@ -1113,7 +1326,6 @@ var LIST_METHOD = {
     union  : function(cur, a, len) {
 
         var map	= {};
-        var s;
         var si;
         var m;
 
@@ -1145,6 +1357,33 @@ var LIST_METHOD = {
     	delete ORIGINAL[key];
     	
     	return r;
+    },
+    
+    //  ##zip
+    //
+    //  
+    zip : function(cur, a, len) {
+
+        var cL  = cur.length;
+        var r   = [];
+        var i;
+        
+        len = a.unshift(cur);
+ 
+        while(cL--) {
+            r[cL]   = $$.pluck(a, cL);
+        }             
+             
+ /*
+        while(cL--) {
+            r[cL]   = [];
+            i       = len;
+            while(i--) {
+                r[cL][i] = a[i][cL];
+            }
+        }
+ */   
+       return r;
     }
 }
 
@@ -1165,6 +1404,7 @@ var LIST_ACCESSOR = function(m, key) {
     if(!cur) {
         if($$.is(Array, key)) {
             cur = key;
+            key = null;
         } else if(a[0] !== void 0 && (m == "first" || m == "last")) {
         	cur = ACTIVE[key] = [];
             initial = true;
@@ -1188,13 +1428,14 @@ var LIST_ACCESSOR = function(m, key) {
 		ORIGINAL[key] = $$.copy(cur,1);
 	}
 
-    //  Return any truthy values. Return `false`, as that is a valid result. We return #cur
-    //  if any other falsy result is received.
+    //  Return any truthy values. 
+    //  Return `false` or `0` as those are valid results.
+    //  If otherwise falsy, return null.
     //
-    return result === false ? false : result || cur;
+    return (result === false || result === 0) ? result : result || null;
 };
 
-//	Core array methods.
+//	Attach core array methods.
 //
 while(ARRAY_M.length) {
 	(function(m) {
@@ -1204,31 +1445,18 @@ while(ARRAY_M.length) {
     })(ARRAY_M.pop());
 }
 
-//  List methods
+//  Attach list methods.
 //
 while(LIST_M.length) {
-	(function(m) {
-        $$[m] = function() {
-
-            //	Methods have varying functional signatures.
-            //
-            var a = $$.argsToArray(arguments);
-
-            //	#LIST_ACCESSOR expects method name as first argument.
-            //
-            a.unshift(m);
-
-            return LIST_ACCESSOR.apply($$, a);
-        };
-    })(LIST_M.pop());
+    $$.extend(LIST_M.pop());
 }
 
+//  For Node we'd be leveraging the CommonJS system. Otherwise, attach to Window.
+//
 if(typeof exports == 'object' && exports) {
     exports.bauhaus = $$;
 } else {
     window.bauhaus = $$;
 }
-
-console.log($$)
 
 })();

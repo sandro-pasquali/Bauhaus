@@ -58,9 +58,11 @@
     console.log("\n> unique");
     console.log(L.unique(["a","b","c","a","d","e","d","d","f","a","g","g","a"]));
 
-	console.log("\nARRAY\n");
-	console.log(L.lastIndexOf("pages", "z"));
+    console.log("> indexOf");
 	console.log(L.indexOf(["eeny","meeny","miney","moe"], "miney", 2));
+	
+    console.log("> lastIndexOf");
+	console.log(L.lastIndexOf("pages", "z"));
 
     console.log("> map");
 	console.log(L.map([1,2,3,4,5], function(e) {
@@ -94,8 +96,8 @@
 	    return e < acc ? e : acc;
 	}));
 	
-	console.log("> find");
-	console.log(L.find("pages", function(e, i, t) {
+	console.log("> findFirst");
+	console.log(L.findFirst("pages", function(e, i, t) {
 	    return e === "d";
 	}));
 
@@ -108,8 +110,9 @@
 	console.log(L.compact([1,null,2,2,3,0,4,undefined,5,5,null,false,8]));
 	
 	console.log("> contains");
-	console.log(L.contains([1,2,3,4,5], "4"));
 	console.log(L.contains([1,2,3,4,5], 4));
+	console.log(L.contains([1,2,3,4,5], "4"));
+	console.log(L.contains([1,2,3,4,5], 6));
 	
 	console.log("> invoke");
 	console.log(L.invoke([[1,2,3],[4,5,6],[7,8,9]], "max"));
@@ -128,14 +131,68 @@
 	}, {foo:1}));
 	
 	console.log("> flatten");
-	console.log(L.flatten(['frank', ['bob', 'lisa'], ['jill', ['tom', 'sally']]]));
-
+	console.log(L.last("tallarray", 'frank', ['bob', 'lisa'], ['jill', ['tom', 'sally']]));
+	console.log(L.flatten("tallarray"));
+	console.log(L.range("tallarray",0))
+	
+	console.log("> group");
+	console.log(L.group([1.3, 2.1, 2.4], function(num){ return Math.floor(num); }));
+	console.log(L.group(['one', 'two', 'three'], "length"));
+	
+	console.log("> search");
+	console.log(L.search([10, 20, 30, 40, 50], 50));
+	console.log(L.search([10, 20, 30, 40, 50], 35));
+	
+	console.log("> search index");
+	console.log(L.search([10, 20, 30, 40, 50], 35, true));	
+	console.log(L.search([10, 20, 30, 40, 50], 50, true));
+	
+	console.log("> sortedIndex");
+	console.log(L.sortedIndex([10, 20, 30, 40, 50], 35));
+	
+	console.log("> sortBy");
+	var sortby = [{
+       "h_id": "3",
+       "city": "Dallas",
+       "state": "TX",
+       "zip": "75201",
+       "price": "162500"
+    }, {
+       "h_id": "4",
+       "city": "Bevery Hills",
+       "state": "CA",
+       "zip": "90210",
+       "price": "319250"
+    }, {
+       "h_id": "5",
+       "city": "New York",
+       "state": "NY",
+       "zip": "00010",
+       "price": "962500"
+    }];
+	console.log(L.sortBy(sortby,'price', function(a){return a.toUpperCase()}, true))
+	console.log(L.sortBy(sortby,'price', function(a){return a.toUpperCase()}, true))
+	
+	console.log("> pluck");
+    console.log(L.pluck([
+        {user: 'tom', state: 'NY'}, 
+        {user: 'dick', state: 'NJ'},
+        {user: 'harry', state: 'ND'}], 
+        "state"));
+	
+	console.log("> after");
+	var _after = L.after(3, function() { console.log("done"); });
+	_after();_after();_after();
+	
+	console.log("> zip");
+	console.log(L.zip(['moe', 'larry', 'curly'], [30, 40, 50, 60, 70], [true, false, false],["why","i","otta"]))
+	
 	console.log("PAGES: ");
 	console.log(L.range("pages", 0));
 	console.log(L.shuffle("pages"));
 	console.log(L.range("pages", 0));
 
-	console.log("SET OPS: ");
+    console.log("> first");
 	L.first("a", "a1", "a2", "a3", "foo", "bar", "baz");
 	L.first("b", "b1", "b2", "b3", "foo");
 	L.first("c", "c1", "c2", "c3", "foo", "bar");
@@ -148,7 +205,7 @@
 	console.log(L.union(["zip","zap"], "a", "b", "c"));
 
 	console.log("> boundFunction");
-	L.boundFunction("console.log(foo)").apply({foo: "bar"});
+	L.compiledFunction("console.log(foo)").apply({foo: "bar"});
 
 
 	</script>
