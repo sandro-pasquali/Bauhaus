@@ -611,13 +611,11 @@ var LIST_METHOD = {
     //  Removes all falsy values from list: false, null, 0, "", undefined, NaN.
     //
     compact : function(cur, a, len) {
-        var r = [];
         while(len--) {
             if(!cur[len]) {
                 cur.splice(len, 1);
             }
         }
-        
         return cur;
     },
     
@@ -1361,28 +1359,32 @@ var LIST_METHOD = {
     
     //  ##zip
     //
-    //  
+    //  Take any number of input arrays and returns an array where corresponding elements 
+    //  in input arrays are merged. The length of the returned array equals the maximum length 
+    //  found in the input arrays.
+    //
+    //  @argumentList:
+    //      0..n    : {Array}   Any number of arrays.
+    //
+    //  @example    .zip(   ["Barack", "James", "John"], 
+    //                      ["Hussein", "Earl", "Fitzgerald"],
+    //                      ["Obama", "Carter", "Kennedy"] );
+    //              [   ["Barack", "Hussein", "Obama"],
+    //                  ["James", "Earl", "Carter", "Bush"], <-- note useless member(4)
+    //                  ["John", "Fitzgerald", "Kennedy"],
+    //                  [undefined, undefined, undefined, "Bush"]];
+    //
     zip : function(cur, a, len) {
 
-        var cL  = cur.length;
-        var r   = [];
-        var i;
+        a.unshift(cur);
         
-        len = a.unshift(cur);
+        var cL  = $$.max($$.pluck(a, "length"));
+        var r   = [];
  
         while(cL--) {
             r[cL]   = $$.pluck(a, cL);
         }             
-             
- /*
-        while(cL--) {
-            r[cL]   = [];
-            i       = len;
-            while(i--) {
-                r[cL][i] = a[i][cL];
-            }
-        }
- */   
+
        return r;
     }
 }

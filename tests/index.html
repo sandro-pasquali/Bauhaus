@@ -187,6 +187,9 @@
 	console.log("> zip");
 	console.log(L.zip(['moe', 'larry', 'curly'], [30, 40, 50, 60, 70], [true, false, false],["why","i","otta"]))
 	
+	console.log("> invoke");
+	console.log(L.invoke(L.zip(['moe', 'larry', 'curly'], [30, 40, 50, 60, 70], [true, false, false],["why","i","otta"]), "compact"))
+	
 	console.log("PAGES: ");
 	console.log(L.range("pages", 0));
 	console.log(L.shuffle("pages"));
