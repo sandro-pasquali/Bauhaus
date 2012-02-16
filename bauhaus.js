@@ -30,7 +30,6 @@ var LIST_M = [
     "compose",
     "contains",
     "diff",
-    "size",
     "findFirst",
     "findLast",
     "first",
@@ -48,6 +47,7 @@ var LIST_M = [
     "lastx",
     "max",
     "min",
+    "$original",
     "page",
     "paginate",
     "pluck",
@@ -59,12 +59,15 @@ var LIST_M = [
     "set",
     "shuffle",
     "search",
+    "size",
     "sortBy",
     "sortedIndex",
     "totalPages",
     "union",
     "unique",
     "unset",
+    "$value",
+    "$without",
     "zip"
 ];
 
@@ -147,9 +150,9 @@ var $$ = {
 	//  Ensure the execution context of a function.
 	//
 	bind    : function(f, c) {
-	    var a = $.argsToArray(arguments, 2);
+	    var a = $$.argsToArray(arguments, 2);
 	    return function() {
-	        return f.apply(c, a.concat($.argsToArray(arguments)));
+	        return f.apply(c, a.concat($$.argsToArray(arguments)));
 	    }
 	},
 	
@@ -561,7 +564,7 @@ var PROC_ARR_ARGS = function(a) {
 //
 //  Creates reusable sort functions.
 //
-//  @see    #sort
+//  @see    #sortBy
 //  @href   http://stackoverflow.com/questions/979256/how-to-sort-an-array-of-javascript-objects
 //
 var SORTER = $$.memoize(function(field, primer, descending) {
@@ -767,8 +770,7 @@ var LIST_METHOD = {
     //  `0` is first item, `1` is second, `-1` is last, `-2` is penultimate.
     //
     //  @argumentList
-    //      [0]: {Number}   The index. If no index is sent (ie. no arguments are sent),
-    //                      #cur is returned, which makes this an alias for ##range
+    //      [0]: {Number}   The index. 
     //
     get     : function(cur, a, len) {
         return cur[a[0] >= 0 ? a[0] : len + a[0]];
@@ -853,9 +855,9 @@ var LIST_METHOD = {
 	//
     intersect   : function(cur, a, len) {
 
-        var aL 	= a.push(cur);
-        var map = {};
-        var res = [];
+        var aLength = a.push(cur);
+        var map     = {};
+        var res     = [];
         var m;
         var si;
         var c;
@@ -866,7 +868,7 @@ var LIST_METHOD = {
             si 	= m.length;
             while(si--) {
             	c = map[m[si]];
-                ((map[m[si]] = c ? c += 1 : 1) === aL) && res.push(m[si]);
+                ((map[m[si]] = c ? c += 1 : 1) === aLength) && (res[res.length] = m[si]);
             }
         }
 
@@ -1276,9 +1278,19 @@ var LIST_METHOD = {
     
     //  ##sortBy
     //
-    sortBy  : function(cur, a){
-        cur.sort(SORTER(a[0], a[1], a[2]));
-        return cur;
+    //  Sorts an array
+    //
+    //  @argumentsList
+    //      0   : field
+    //      1   : primer
+    //      2   : descending
+    //
+    sortBy  : function(cur, a) {
+        if($$.is(Function, a[1])) {
+            return cur.sort(SORTER(a[0], a[1], a[2]));
+        }
+        
+        return cur.sort(SORTER(a[0], false, a[1]));
     },
     
     //  ##sortedIndex

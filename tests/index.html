@@ -150,7 +150,7 @@
 	console.log("> sortedIndex");
 	console.log(L.sortedIndex([10, 20, 30, 40, 50], 35));
 	
-	console.log("> sortBy");
+	console.log("> sort");
 	var sortby = [{
        "h_id": "3",
        "city": "Dallas",
@@ -170,9 +170,9 @@
        "zip": "00010",
        "price": "962500"
     }];
-	console.log(L.sortBy(sortby,'price', function(a){return a.toUpperCase()}, true))
-	console.log(L.sortBy(sortby,'price', function(a){return a.toUpperCase()}, true))
-	
+	console.log(L.sortBy(L.copy(sortby), 'city', function(a){return a}, false))
+	console.log(L.sortBy(L.copy(sortby), 'price', true))
+
 	console.log("> pluck");
     console.log(L.pluck([
         {user: 'tom', state: 'NY'}, 
