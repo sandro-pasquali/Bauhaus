@@ -1,11 +1,9 @@
 {
     "name": "bauhaus",
-    "version": "0.1.2",
-    "url": "http://www.unifiedapplications.com/github/Bauhaus",
+    "version": "0.1.3",
     "description": "A library of functional, list, pagination, iteration methods for arrays for Client and Nodejs.",
-    "keywords": ["functional", "underscore", "array", "javascript", "nodejs", "lists", "list", "data", "data structures"],
+    "keywords": ["albers","mies","functional", "underscore", "array", "javascript", "nodejs", "lists", "list", "data", "data structures"],
     "author": "Sandro Pasquali <spasquali@gmail.com>",
-    "main": "bauhaus",
     "engines": { "node": ">= 0.6.1" },
     "repository": {
         "type"  : "git",
